@@ -1,0 +1,9 @@
+#.gitignore
+.Rproj.user
+.Rhistory
+.RData
+.Ruserdata
+*.Rcheck/
+*.zip
+*.tar.gz
+*R_temp/
