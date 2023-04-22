@@ -1,0 +1,156 @@
+---
+title: "toy_example"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{toy_example}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+This document quickly shows how to use this package. For further details, see TBD (citation).
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>"
+)
+```
+
+```{r setup}
+# devtools::install_github()
+# devtools::build_rmd('vignettes/toy_example.Rmd')
+devtools::load_all()
+library(tidyverse)
+```
+
+First, setup. We use the bimodal family.
+```{r}
+den.fam <- biM_family()
+
+grid.size <- 1024
+grid <- seq(den.fam$range[1], den.fam$range[2], length.out = grid.size)
+
+n.train <- 50
+train.size <- 200
+n.test <- 250
+test.size  <- 10
+max.k <- 10
+
+# generate data
+set.seed(42)
+dat <- genSimData(
+  den.fam,
+  n.train, train.size,
+  n.test, test.size,
+  grid.size
+)
+```
+
+Next, use pre-smoothing to turn discrete observations into density functions.
+```{r}
+dat$train.obsv <- dat$train.sample
+# get bandwidth
+bw <- quantile(apply(dat$train.obsv, 1, bw.SJ), 0.5)
+dat$train.sample <- preSmooth.kde(
+  obsv = dat$train.obsv,
+  grid = grid,
+  kde.opt = list(
+    bw = bw, kernel = 'g',
+    from = den.fam$range[1],
+    to = den.fam$range[2]
+  )
+)
+dat$bw <- bw
+```
+
+Further, transform the density functions into Hilbert space via centered log transformation (centered log-ratio).
+```{r}
+tm.c <- normL2(rep(1, grid.size), grid = grid) ^ 2 #constant used for centering
+ls.tm <- toHilbert(
+  dat$train.sample, grid = grid, 
+  transFun = function(f, grid) orthLog(f, grid, against = 1 / tm.c),
+  eps = .Machine$double.eps^(1/2)
+)
+dat$train.curve <- ls.tm$mat.curve
+dat$train.idx.drop <- ls.tm$idx.drop
+dat$ref.pt <- ls.tm$ref.pt
+rm(ls.tm)
+dat$grid <- grid
+```
+
+Functional principal component analysis and the induced density family.
+```{r}
+fpca.res <- do.call(
+  fdapace::FPCA,
+  list(
+    Ly = asplit(dat$train.curve, 1),
+    Lt = replicate(n = nrow(dat$train.curve), expr = grid, simplify = FALSE),
+    optns = list(
+      error = TRUE,
+      lean = TRUE,
+      FVEthreshold = 1,
+      methodSelectK = 'FVE',
+      plot = FALSE,
+      useBinnedData = 'OFF'
+    )
+  )
+)
+fpca.den.fam <- fpca2DenFam(fpca.res, control = list(num.k = max.k))
+```
+
+We can now estimate using the induced family `fpca.den.fam`.
+```{r}
+ls.fpca.esti <- fpcaEsti(
+  mat.obsv = dat$test.sample,
+  fpca.res = fpca.res,
+  esti.method = c("FPCA_BLUP", "FPCA_MAP", "FPCA_MLE"),
+  control = list(
+    num.k = 'AIC', max.k = max.k,
+    method = 'LBFGS', return.scale = 'parameter'
+  )
+)
+```
+This is the estimated parameters, one row for one sample.
+```{r}
+ls.fpca.esti$res %>% head
+```
+This is the methods and additional information.
+```{r}
+ls.fpca.esti$idx %>% head
+```
+
+We can also look at the density functions.
+```{r, fig.width=8, fig.height=5}
+mat.pdf <- par2pdf(
+  fpca.den.fam, 
+  fpca.den.fam$fill.par(ls.fpca.esti$res %>% `[<-`(is.na(.), 0)),
+  grid = grid
+)
+mat.pdf.true <- par2pdf(den.fam, dat$test.par, grid = grid)
+df.pdf <- ls.fpca.esti$idx %>% mutate(idx.row = row_number()) %>% 
+  mutate(
+    pdf = map(idx.row, ~ {
+      tibble(x = grid, pdf = mat.pdf[.x, ])
+    })
+  ) %>% as_tibble
+df.pdf <- df.pdf %>% bind_rows(
+  tibble(idx.obsv = seq(n.test), esti.method = 'true') %>% 
+    mutate(pdf = map(idx.obsv, ~ {
+      tibble(x = grid, pdf = mat.pdf.true[.x, ])
+    }))
+)
+df.pdf %>% 
+  filter(idx.obsv %in% sample.int(n.test, 4)) %>% 
+  unnest('pdf') %>% 
+  mutate(esti.method = factor(esti.method, c(
+    'true', 'FPCA_MLE', 'FPCA_MAP', 'FPCA_BLUP'
+  ))) %>% 
+  ggplot(aes(x, y = pdf)) +
+  geom_path(aes(
+    color = esti.method, linetype = esti.method
+  )) +
+  labs(x = 'x', y = 'density function', color = 'method', linetype = 'method') +
+  facet_grid(~ idx.obsv, labeller = label_both) +
+  theme(legend.position = 'bottom')
+```
+

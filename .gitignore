@@ -7,3 +7,6 @@
 *.zip
 *.tar.gz
 *R_temp/
+inst/doc
+/doc/
+/Meta/

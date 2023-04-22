@@ -10,16 +10,6 @@ Rcpp::Rostream<true>&  Rcpp::Rcout = Rcpp::Rcpp_cout_get();
 Rcpp::Rostream<false>& Rcpp::Rcerr = Rcpp::Rcpp_cerr_get();
 #endif
 
-// rcpp_hello
-List rcpp_hello();
-RcppExport SEXP _densityFPCA_rcpp_hello() {
-BEGIN_RCPP
-    Rcpp::RObject rcpp_result_gen;
-    Rcpp::RNGScope rcpp_rngScope_gen;
-    rcpp_result_gen = Rcpp::wrap(rcpp_hello());
-    return rcpp_result_gen;
-END_RCPP
-}
 // cpp_dotL2
 double cpp_dotL2(NumericVector f1, NumericVector f2, NumericVector grid);
 RcppExport SEXP _densityFPCA_cpp_dotL2(SEXP f1SEXP, SEXP f2SEXP, SEXP gridSEXP) {
@@ -61,7 +51,6 @@ END_RCPP
 }
 
 static const R_CallMethodDef CallEntries[] = {
-    {"_densityFPCA_rcpp_hello", (DL_FUNC) &_densityFPCA_rcpp_hello, 0},
     {"_densityFPCA_cpp_dotL2", (DL_FUNC) &_densityFPCA_cpp_dotL2, 3},
     {"_densityFPCA_cpp_calCdf", (DL_FUNC) &_densityFPCA_cpp_calCdf, 2},
     {"_densityFPCA_cpp_distWass", (DL_FUNC) &_densityFPCA_cpp_distWass, 4},
