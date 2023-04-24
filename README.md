@@ -18,4 +18,4 @@ devtools::install_github('jiamingqiu/densityFPCA')
 # to build vignettes, uncomment the following
 # devtools::install_github('jiamingqiu/densityFPCA', build_vignettes = TRUE)
 ```
-See the vignette for quick start guide. Currently function documentations are written as inline comments within the function body. Will be updated to proper R documentation.
+See the vignette for quick start guide. 
