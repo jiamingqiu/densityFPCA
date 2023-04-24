@@ -4,7 +4,10 @@
 <!-- badges: start -->
 <!-- badges: end -->
 
-The goal of `densityFPCA` is to implement the method proposed in TBD (citation).
+The goal of `densityFPCA` is to implement the method proposed in 
+
+Qiu, Jiaming, Xiongtao Dai, and Zhengyuan Zhu. 2022. “Nonparametric Estimation of Repeated Densities with Heterogeneous Sample Sizes.” Journal of the American Statistical Association 0 (0): 1–13. https://doi.org/10.1080/01621459.2022.2104728.
+
 
 ## Installation
 
