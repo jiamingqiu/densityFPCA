@@ -220,7 +220,7 @@ fpcaEsti2pdf <- function(fpca.res, mat.par, num.k, grid){
 #' ls.obsv <- with(
 #'   den.fam, apply(
 #'     gen_par(100), 1, function(par) rpdf(rpois(1, 500), par),
-#'     simplify = F
+#'     simplify = FALSE
 #'   )
 #' )
 #' grid <- seq(min(den.fam$range), max(den.fam$range), length.out = 1024)
@@ -1138,8 +1138,23 @@ tCauchy_family = list(
   par.range = matrix(c(0, 1, log(0.5), log(1)), 2, 2)
 )
 
-## Bimodal family
-
+#' Bimodal family
+#'
+#' @return a list of
+#' - `pdf`: density function;
+#' - `rpdf`: random generator;
+#' - `gen_par`: generate parameters;
+#' - `par.range`: matrix of parameter range, one column for one parameter
+#' - `range`: domain of support.
+#'
+#' @details The density function is proportional to
+#' \deqn{
+#'   \exp( (4 + \theta) x - (26.5 + \theta) x^2 + 47 x^3 - 25 x^4 )
+#' }
+#' on \eqn{x \in (0, 1)}.
+#'
+#' @export
+#'
 biM_family <- function(){
 
   # biMrange <- c(0,1)
@@ -1486,7 +1501,20 @@ tGamma <- function(edge){
 }
 
 
-# Truncated Normal family
+#' Truncated Normal family
+#'
+#' @param edge domain of support, single value taken as `c(-1, 1) * abs(edge)`;
+#' @param easy whether the parameters would be generated with fewer variation.
+#'
+#' @return a list of
+#' - `pdf`: density function;
+#' - `rpdf`: random generator;
+#' - `gen_par`: generate parameters;
+#' - `par.range`: matrix of parameter range, one column for one parameter
+#' - `range`: domain of support.
+#'
+#' @export
+#'
 tNrml = function(edge, easy = FALSE){
   if(length(edge) == 1){
     edge = c(-1, 1) * abs(edge)
@@ -1682,7 +1710,7 @@ xdCauchy <- function(){
 
 #' Truncated Gaussian mixture family.
 #'
-#' @param edge support of density.
+#' @param edge domain of support, single value taken as `c(-1, 1) * abs(edge)`.
 #' @param num.mixture number of mixture.
 #'
 #' @return a list of

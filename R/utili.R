@@ -190,7 +190,7 @@ ksTest <- function(obsv, density, grid, ...){
   # ...: additional arguments passed to ks.test.
   # returns:
   # what ks.test return.
-  if (class(density) == 'function') {
+  if (inherits(density, 'function')) {
     w.cdf <- function(x){
       integrate(
         density,

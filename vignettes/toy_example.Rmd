@@ -19,7 +19,8 @@ knitr::opts_chunk$set(
 ```{r setup}
 # devtools::install_github()
 # devtools::build_rmd('vignettes/toy_example.Rmd')
-devtools::load_all()
+# devtools::load_all()
+library(densityFPCA)
 library(tidyverse)
 ```
 

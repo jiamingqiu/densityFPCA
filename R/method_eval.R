@@ -126,7 +126,7 @@ genSimData <- function(
 #' ls.obsv <- with(
 #'   den.fam, apply(
 #'     gen_par(5), 1, function(par) rpdf(rpois(1, 50), par),
-#'     simplify = F
+#'     simplify = FALSE
 #'   )
 #' )
 #' grid <- seq(min(den.fam$range), max(den.fam$range), length.out = 1024)
@@ -187,7 +187,7 @@ preSmooth.kde <- function(obsv, grid, kde.opt = list()){
 #' ls.obsv <- with(
 #'   den.fam, apply(
 #'     gen_par(5), 1, function(par) rpdf(rpois(1, 50), par),
-#'     simplify = F
+#'     simplify = FALSE
 #'   )
 #' )
 #' grid <- seq(min(den.fam$range), max(den.fam$range), length.out = 1024)
@@ -298,7 +298,7 @@ preSmooth.locfit <- function(obsv, grid, lp.opt = list()){
 #' ls.obsv <- with(
 #'   den.fam, apply(
 #'     gen_par(5), 1, function(par) rpdf(rpois(1, 500), par),
-#'     simplify = F
+#'     simplify = FALSE
 #'   )
 #' )
 #' grid <- seq(min(den.fam$range), max(den.fam$range), length.out = 1024)
@@ -330,7 +330,7 @@ toHilbert <- function(mat.curve, grid, transFun = 'log', eps = .Machine$double.e
     stop('check input dimension: ncol(mat.curve) != length(grid).')
   }
 
-  if (class(transFun) != 'function'){
+  if (!inherits(transFun, 'function')){
     transFun <- match.arg(transFun, c('log'))
 
     if (transFun == 'log'){

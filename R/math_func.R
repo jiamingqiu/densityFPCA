@@ -169,7 +169,7 @@ semiDscWass = function(obsv, target, p, grid){
   #          or values proportional to the actual pdf. (i.e., normalizing not needed)
   # check input TBD
 
-  if(typeof(target) == 'closure'){
+  if(inherits(target, 'closure')){
     if(!missing(grid)) warnings('Unused arguement: grid.')
     # compute ecdf
     cdf = ecdf(obsv)
@@ -352,7 +352,7 @@ tolVar <- function(f, range){
   # Detail:
   # numeric approx with f linearly interpolated.
 
-  if (!missing(range) & class(f) == 'function') {
+  if (!missing(range) & inherits(f, 'function')) {
     abs.deriv.f <- function(x) abs(nloptr::nl.grad(x, f))
     w.f <- Vectorize(abs.deriv.f)
     return(integrate(
