@@ -1,3 +1,21 @@
+#' L2 inner product of functions
+#'
+#' @param f1 one function, either function or vector.
+#' @param f2 another function, either function or vector.
+#' @param range domain of the L2 space.
+#' @param grid default `NA`, grid for discretization.
+#'
+#' @return a number
+#' @export
+#'
+#' @details if `grid` is not `NA`, then `f1` and `f2` are arrays on `grid`.
+#' @examples
+#' dotL2(function(t) rep(1, length(t)), function(t) t, range = c(-1, 1))
+#' dotL2(
+#'   rep(1, 1024),
+#'   seq(-1, 1, length.out = 1024),
+#'   grid = seq(-1, 1, length.out = 1024)
+#' )
 dotL2 = function(f1, f2, range, grid = NA){
   # f1 & f2 are functions, range are range, say c(0,5)
   # if grid != NA, then
@@ -65,6 +83,17 @@ dotL2 = function(f1, f2, range, grid = NA){
 # integrate(splinefun(x = nrml_trial$workGrid, y = nrml_trial$phi[,1], method = 'natural'), min(nrml_trial$workGrid), max(nrml_trial$workGrid)) %>% microbenchmark(times=10000)
 # dotL2(nrml_trial$phi[,1], rep(1, length(nrml_trial$workGrid)), grid = nrml_trial$workGrid)%>% microbenchmark(times=10000)
 
+#' L2 norm of function, wrapper around `dotL2`
+#'
+#' @param f a function or array of function
+#' @param range domain of L2 space
+#' @param grid grid for discretization.
+#'
+#' @return a number. The L2 norm of `f`.
+#' @export
+#'
+#' @examples
+#' normL2(function(t) rep(1, length(t)), range = c(0, 1))
 normL2 = function(f, range, grid = NA){
   return(sqrt(dotL2(f,f,range,grid)))
 }

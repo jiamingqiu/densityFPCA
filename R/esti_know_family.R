@@ -305,45 +305,34 @@ calMLE = function(newx, den.fam, control = list()){
     return(opt.res$par)
   }
 }
-# LEGACY
-# calMLE = function(newx, denFam, initPar, grid, scale = 'log', multiStart = FALSE){
-#   input.multiStart = multiStart
-#   # just to translate into acceptable argument.
-#   if(typeof(multiStart[1]) == 'logical'){
-#     multiStart = c(1,0)
-#   }
-#   dimPar = length(initPar)
-#
-#   if(dimPar == 1){
-#     opt_res = optim(initPar, function(par){-1*sum(log(denFam$pdf(newx, par)))}, method = 'Brent', lower = -1e+3, upper = 1e+3)
-#   }else{
-#     opt_res = smartOptim(
-#       initPar, function(par){-1*sum(log(denFam$pdf(newx, par)))},
-#       method = 'L-BFGS-B', multiStart = multiStart,
-#       lower = denFam$par.range[1, ],
-#       upper = denFam$par.range[2, ]
-#     )
-#   }
-#   if(opt_res$convergence!=0){
-#     warning(c('optim convergence code ', opt_res$convergence), ' while calculating MLE.')
-#   }
-#   if(is.na(opt_res$value)){
-#     stop('NA as maximum.')
-#   }
-#   if (scale == 'log') {
-#     return(log(denFam$pdf(grid, opt_res$par)))
-#   }
-#   if (scale == 'origin') {
-#     return(denFam$pdf(grid, opt_res$par))
-#   }
-#   if (scale == 'parameter') {
-#     return(c(opt_res$value, opt_res$par))
-#   }
-# }
 
 
-# EM algorithm for Mixture Gaussian family (no truncation)
-# Caution: no variance inflating step.
+#' EM algorithm for Mixture Gaussian family (no truncation).
+#'
+#' @param obsv sample;
+#' @param num.mixture number of mixtures;
+#' @param control a list of controling arguments:
+#' - `return.scale`: what to return: `"log"`, `"origin"`,
+#' or `"parameter"`(default);
+#' - `grid`: grid to compute return when `return.scale` is `"log"` or
+#' `"origin"`;
+#' - `tol`: tolerance to stop iteration, default is `1e-10`;
+#' - `maxit`: maximum number of iteration, default `1000`.
+#'
+#' @return either the list of parameter estimates and number of iteration;
+#' or the corresponding log-density / density on grid.
+#' @export
+#' @details Caution: no variance inflating step.
+#' If iteration determine there would be no observation in a mixture,
+#' the number of mixture will be shrunken by 1, and algorithm restart.
+#'
+#' @examples
+#' den.fam <- tMixGauss(edge = 1000, num.mixture = 2)
+#' set.seed(42)
+#' true.par <- den.fam$gen_par(1)
+#' ls.esti <- emMixGauss(den.fam$rpdf(2e+3, true.par), 2, list(maxit = 5e+3))
+#' ls.esti
+#' tMixGauss.repar(work.par = true.par)
 emMixGauss <- function(obsv, num.mixture, control = list()){
   # EM algorithm for Gaussian mixture model, at least k+1 observations.
   # args:
@@ -460,6 +449,24 @@ emMixGauss <- function(obsv, num.mixture, control = list()){
 
 # a function calculating first and second moments of truncated normal r.v.
 # higher order by pracma::fderiv
+#' Compute moment of truncated normal distribution.
+#'
+#' @param a lower bound of support
+#' @param b upper bound of support
+#' @param p order of moment
+#' @param mu expectation of the normal distribution before truncation
+#' @param sd standard devation of the normal distribution before truncation
+#'
+#' @return the `p`-th moment. When `p = 1, 2`, use analytic solution, otherwise
+#' use moment generating function.
+#' @export
+#'
+#' @examples
+#' mTruncNrml(0, 1)
+#' integrate(
+#'   function(t) t * dnorm(t) / (pnorm(1) - pnorm(0)),
+#'   lower = 0, upper = 1
+#' )
 mTruncNrml = function(a, b, p = 1, mu = 0, sd = 1){
 
   # smpl = rnorm(1000, mu, sd)
@@ -479,7 +486,8 @@ mTruncNrml = function(a, b, p = 1, mu = 0, sd = 1){
   }
   if(p == 2){
     return(
-      mu^2 + 2 * sd * mu * tmM + sd^2 - sd^2 * (w.b * dnorm(w.b) - w.a * dnorm(w.a)) / (pnorm(w.b) - pnorm(w.a))
+      mu^2 + 2 * sd * mu * tmM + sd^2 -
+        sd^2 * (w.b * dnorm(w.b) - w.a * dnorm(w.a)) / (pnorm(w.b) - pnorm(w.a))
     )
   }
 
@@ -498,6 +506,47 @@ mTruncNrml = function(a, b, p = 1, mu = 0, sd = 1){
 }
 
 
+#' EM algorithm on truncated Gaussian mixture.
+#'
+#' @param obsv sample;
+#' @param num.mixture number of mixtures;
+#' @param edge domain of support, single value taken as `c(-1, 1) * abs(edge)`;
+#' @param control a list of controling arguments:
+#' - `return.scale`: what to return: `"log"`, `"origin"`,
+#' or `"parameter"`(default);
+#' - `grid`: grid to compute return when `return.scale` is `"log"` or
+#' `"origin"`;
+#' - `tol`: tolerance to stop iteration, default is `1e-10`;
+#' - `maxit`: maximum number of iteration, default `1000`.
+#'
+#' @return Either the list of parameter estimates and number of iteration;
+#' or the corresponding log-density / density on grid.
+#' @export
+#' @details Caution: no variance inflating step.
+#' If iteration determine there would be no observation in a mixture,
+#' the number of mixture will be shrunken by 1, and algorithm restart.
+#' If `return.scale = "optim"`, return a list similar to `optim` result, whose
+#' `par` is parameters in the format of `tMixGauss()`, for internal use.
+#' See reference for the method implemented.
+#'
+#' @references
+#' Lee, Gyemin, and Clayton Scott. 2012. “EM Algorithms for Multivariate
+#' Gaussian Mixture Models with Truncated and Censored Data.”
+#' Computational Statistics & Data Analysis 56 (9): 2816–29.
+#' https://doi.org/10.1016/j.csda.2012.03.003.
+#'
+#'
+#' @examples
+#' den.fam <- tMixGauss(edge = 3, num.mixture = 2)
+#' set.seed(2)
+#' true.par <- den.fam$gen_par(1)
+#' obsv <- den.fam$rpdf(2e+3, true.par)
+#' range(obsv)
+#' ls.esti.not <- emMixGauss(obsv, 2, list(maxit = 5e+3))
+#' ls.esti <- emTruncMixGauss(obsv, 2, edge = 3, list(maxit = 5e+3))
+#' ls.esti.not
+#' ls.esti
+#' tMixGauss.repar(work.par = true.par)
 emTruncMixGauss <- function(obsv, num.mixture, edge, control = list()){
   # EM algorithm for truncated mixture Gaussian. Truncation after mixing.
   # args:

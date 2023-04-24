@@ -1,5 +1,41 @@
 ## functions for fpca related estimates
 
+#' FPCA family based estimation
+#'
+#' @param mat.obsv a matrix or list where one row is one sample;
+#' @param fpca.res a result from `fdapacd::FPCA`;
+#' @param esti.method a character array of the method names, possible values are
+#' `"FPCA_BLUP"`, `"FPCA_MLE"`, `"FPCA_MAP"`, `"FPCA_MKE"`;
+#' @param control a list of controling arguments:
+#' - `num.k`: number of eigenfunc to use, missing then use all.
+#' To use AIC for adaptive choosing, set to `"AIC"`;
+#' - `max.k`: maximum number of eigenfunc to use, neglected unless
+#' `num.k = 'AIC'`;
+#' - `init.par`: initial value for optimization, set to zero if missing,
+#' neglected if `num.k` is not number;
+#' - `method`: method to use for optimization, missing use DIRECT-P;
+#' - `nl.control`: list of options for `nloptr`, see `nloptr::nl.opts`, missing
+#' use `list()`;
+#' - `return.scale`: what to return:
+#' `"origin"` (estimated densities), `"log"`(log of estimated densities),
+#'  `"parameter"`(default, estimated parameters),
+#'  `"optim"`(optimization results);
+#' - `grid`: grid to compute return when `return.scale` is `"log"` or
+#' `"origin"`, missing then use `fpca.res$workGrid`;
+#' - `wass.p`: `"FPCA_MKE"` only, power of Wasserstein metric.
+#' - `extend.par.range`, `check`, `check.sample`: passed to `fpca2DenFam`, use
+#'  default if missing, `set.fpcaEstFun_control` may alter some default values.
+#'
+#' @return a list of
+#' - `res`: a matrix where estimated parameters / (log-)densities as rows,
+#'   or list of optim results;
+#' - `grid`, NULL if not necessary;
+#' - `idx`: a data.frame for indexing observations and estimating methods;
+#' - `message`: list of error message, if any;
+#' - `time`: computing time.
+#' @export
+#'
+#' @examples # See vignette.
 fpcaEsti <- function(mat.obsv, fpca.res, esti.method, control = list()){
   # compute fpca based estimation of new.obsv given fpca.res with esti.method
   # args:
@@ -30,26 +66,6 @@ fpcaEsti <- function(mat.obsv, fpca.res, esti.method, control = list()){
   # - time.
   # Note:
   #   num.k = "AIC" implemented for all method, but only justified for FPCA_MLE.
-
-  # DEBUG
-  # err = 'NA'
-  # dummy <- genSimData(tNrml(6), 50, Inf, 5, 5)
-  # train.sample <- dummy$train.sample
-  # new.obsv <- dummy$test.sample
-  # grid <- dummy$grid
-  # esti.method <- c('FPCA_MLE', 'FPCA_MKE')
-  # fpca.option <- list(
-  #   error = FALSE,
-  #   lean = TRUE,
-  #   maxK = 5,
-  #   plot = FALSE,
-  #   useBinnedData = 'OFF'
-  # )
-  # proc.train <- preTrain(train.sample = train.sample, grid = grid)
-  # proc.train$optns <- fpca.option
-  # fpca.res <- do.call(fdapace::FPCA, proc.train)
-  # esti.method <- fpcaEstiFun(esti.method, list(multiStart = c(1, 0), scale = 'origin'))
-  # esti.method <- esti.method[[1]]
 
   # if (class(fpca.res) != 'FPCA') {
   #   stop('check input fpca.res.')
@@ -495,51 +511,18 @@ fpcaEsti.f <- function(fpca.res, esti.method, control = list()){
   return(setNames(res, esti.method))
 }
 
-# no longer needed after unifying call syntax for individual methods.
-# fpcaEstiFun <- function(esti.method, esti.option){
-#   # get the actual fpca based estimating function from its name
-#   # args:
-#   # esti.method: the name (character) of estimating method.
-#   # esti.option: a list of options to pass to actual estimating function.
-#   # return:
-#   # the desired estimating function.
-#
-#   ls.esti.fun <- kListFpcaMethod
-#
-#   if (!all(esti.method %in% names(ls.esti.fun))) {
-#     stop('unknown method.')
-#   }
-#
-#   if (length(esti.method) == 1) {
-#     res.fun <- function(newx, fpca.res){
-#       (ls.esti.fun[[esti.method]])(
-#         newx = newx, fpca_res = fpca.res,
-#         scale = esti.option$scale, multiStart = esti.option$multiStart
-#       )
-#     }
-#   } else {
-#     # TODO: this part seems to be broken, idk why.
-#     res.fun <- list()
-#     for (i in seq_len(length(esti.method))) {
-#       tm.name <- esti.method[i]
-#       res.fun[[ tm.name ]] <- function(newx, fpca.res){
-#         #	  cat(paste0(tm.name, '\n'))
-#         (ls.esti.fun[[ tm.name ]])(
-#           newx = newx, fpca_res = fpca.res,
-#           scale = esti.option$scale, multiStart = esti.option$multiStart
-#         )
-#       }
-#     }
-#   }
-#   return(res.fun)
-#
-# }
-
-
 ### individual methods ========================================================
 
 # some tools ==================================================================
 
+#' Set default options for fpca based estimators
+#'
+#' @param envir the current within function environment housing
+#'  `control` and `fpca.res`.
+#'
+#' @return a list of control options, see source file for behavior.
+#' @export
+#'
 set.fpcaEstFun_control <- function(envir){
   # setting control list for individual methods below
   # args:
@@ -918,6 +901,34 @@ fpca_MAP = function(newx, fpca.res, control = list()){
 #   })
 # }
 
+#' m-coordinate to nature coordinate (e-coord)
+#'
+#' @param m.co moment coordinate, an array;
+#' @param fpca.res `fdapace::FPCA` result
+#' @param control a list of controling arguments:
+#' - `num.k`: number of eigenfunc to use, missing then use all;
+#' - `init.par`: initial value for optim, missing the 0;
+#' - `method`: method to use for optimization, missing then DIRECT-P;
+#' - `nl.control`: list of options for `nloptr`, see `nloptr::nl.opts`, missing
+#' then `list()`;
+#' - `return.scale`: what to return: `"log"`, `"origin"`,
+#' `"parameter"`(default), `"optim"`;
+#' - `grid`: grid to compute return when `return.scale` is `"log"` or
+#' `"origin"` missing then use `fpca.res$workGrid`;
+#' - `extend.par.range`, `check`, `check.sample`: passed to `fpca2DenFam`, use
+#' default if missing, `set.fpcaEstFun_control` may alter some default values.
+#'
+#' @return corresponding e-coordinate, or optim result, or (log-)density.
+#' @export
+#' @details
+#' By Legendre transformation, namely maximizing
+#' `m.co %*% par - nrml_const(par)` for `par` to get e-coordinate,
+#' default initial value of optimization set to be the column means of
+#' `fpca_res$xiEst`, which is 0. Note that this is effectively computing
+#' MLE of e-coordinate using (expectation of) sufficient statistics. Because
+#' m-coordinate is the expectation of sufficient statistics. Here `nrml_const`
+#' is the normalizing constant in exponential family (i.e., \eqn{B(\theta)}).
+#'
 m2eCoord = function(m.co, fpca.res, control = list()){
   # m-coordinate -> nature coordinate (e-coord)
   # args:
@@ -985,6 +996,18 @@ m2eCoord = function(m.co, fpca.res, control = list()){
 }
 
 
+#' compute m-coordinate from nature coordinate (e-coord)
+#'
+#' @param e.co an array of natrue coordinate (i.e., canonical parameters);
+#' @param fpca.res `fdapace::FPCA` result;
+#' @param nrml.const normalizing constant, provide s.t. no repeat computation;
+#' @param control a list of controling arguments:
+#' - `num.k`: number of eigenfunc to use, missing then use all.
+#'
+#' @return corresponding m-coordinate, effectively just integrate, since
+#' m-coord is just expectation of sufficient statistics.
+#' @export
+#'
 e2mCoord <- function(e.co, fpca.res, nrml.const, control = list()){
   # m-coordinate <- nature coordinate (e-coord)
   # args:

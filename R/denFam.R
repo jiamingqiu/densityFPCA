@@ -192,6 +192,53 @@ fpcaEsti2pdf <- function(fpca.res, mat.par, num.k, grid){
   # return(mat.pdf)
 }
 
+#' Construct approximating family from FPCA result
+#'
+#' @param fpca.res `fdapace::FPCA` result.
+#' @param control a list of controlling arguments:
+#' - `num.k`: number of eigenfunc building the family, missing the use all;
+#' - `extend.par.range`: `FALSE`(default), or positive numbers > 1 of length
+#' one or `num.k`, determining how each dim of the `par.range` would be extended
+#' from the `fpca.res$xiEst`;
+#' - `check`: `FALSE`(default)/`TRUE`, whether to run `checkDenFamNumeric`;
+#' - `check.sample`(optional): argument passed to `checkDenFamNumeric`, if
+#' supplied, check will be set as `TRUE`;
+#' - `get.prior`: `FALSE`(default)/`TRUE`, whether to compute prior information
+#' from `fpca.res$xiEst`.
+#'
+#' @return a list of
+#' - `pdf`: density;
+#' - `logpdf.gr`: gradient of log density;
+#' - `par.range`: a matrix for range of parameters (`xiEst`);
+#' - `suff.f`: a function computes sufficient statistics.
+#'
+#' Note that no random generator included.
+#' @export
+#'
+#' @examples
+#' den.fam <- tNrml(2)
+#' ls.obsv <- with(
+#'   den.fam, apply(
+#'     gen_par(100), 1, function(par) rpdf(rpois(1, 500), par),
+#'     simplify = F
+#'   )
+#' )
+#' grid <- seq(min(den.fam$range), max(den.fam$range), length.out = 1024)
+#' mat.pdf <- preSmooth.kde(ls.obsv, grid = grid, kde.opt = list(bw = 0.25))
+#' ls.hilbert <- toHilbert(
+#'   mat.pdf, grid,
+#'   transFun = function(f, grid) orthLog(f, grid, against = 1 / 4),
+#'   eps = .Machine$double.eps^(1/2)
+#' )
+#' fpca.res <- do.call(
+#'   fdapace::FPCA, list(
+#'     Ly = asplit(ls.hilbert$mat.curve, 1),
+#'     Lt = replicate(nrow(ls.hilbert$mat.curve), expr = grid, simplify = FALSE),
+#'     optns = list(lean = TRUE, methodSelectK = 2, useBinnedData = 'OFF')
+#'   )
+#' )
+#' fpca.den.fam <- fpca2DenFam(fpca.res, control = list(num.k = 2))
+#' matplot(grid, fpca.den.fam$suff.f(grid), type = 'l')
 fpca2DenFam <- function(fpca.res, control = list()){
   # function constructing a density family list with FPCA result.
   # args:
@@ -631,6 +678,27 @@ checkSampler <- function(den.fam, size, n = 10, what = 'diff', kde.option = list
 
 # for numerically inspecting density families =================================
 
+#' check whether negative log-likelihood and its gradient maintain
+#' sensible values on vertices of parameter range.
+#'
+#' @param den.fam density family.
+#' @param check.sample (optional) sample used to compute loglikelihood,
+#' recommended if `den.fam` does not have random generator (`rpdf`).
+#'
+#' @return `NULL` or a list of sample used and a matrix of problematic points
+#' and values. Cannot handle high dimensional parameters.
+#' samples will be generated with randomly chosen parameter values.
+#' @details If `den.fam` does not provide random generator `rpdf`, use
+#' `Runuran` to draw sample based on density function `pdf`, which may be slow.
+#' @export
+#'
+#' @examples
+#' checkDenFamNumeric(tNrml(3))
+#' den.fam <- tMixGauss(6)
+#' den.fam$par.range[, 1] <- c(-10, 10)
+#' checkDenFamNumeric(den.fam)
+#' den.fam$par.range[, 1] <- c(-10.5, 11)
+#' checkDenFamNumeric(den.fam)
 checkDenFamNumeric <- function(den.fam, check.sample){
   # check whether negative log-likelihood and its gradient
   # maintain sensible values on vertices of par.range.
@@ -738,13 +806,21 @@ checkDenFamNumeric <- function(den.fam, check.sample){
     return(NULL)
   }
 }
-
 # tst.den.fam <- tMixGauss(6)
 # tst.den.fam$par.range[, 1] <- c(-10, 10)
 # checkDenFamNumeric(tst.den.fam)
 # tst.den.fam$par.range[, 1] <- c(-10.5, 11)
 # checkDenFamNumeric(tst.den.fam)
 
+#' Check if the gradient of loglikelihood is correct.
+#'
+#' @param den.fam density family;
+#' @param tol tolerence of relative error;
+#'
+#' @return `NULL` if all good, or a list of problematic points and gradients.
+#' @export
+#'
+#' @examples # See vignette.
 checkDenFamGrident <- function(den.fam, tol = 1e-4){
   # for density family, check if the analytic gradient is correct, if provided.
   # args:
@@ -753,14 +829,34 @@ checkDenFamGrident <- function(den.fam, tol = 1e-4){
   # returns:
   # nothing (NULL) if all good, or a list of points and gradients having problem.
   # remark:
-  # it seems nloptr::check.derivatives is a bit problemetic, uses homemade one.
+  # it seems nloptr::check.derivatives is a bit problematic, uses homemade one.
 
   if (is.null(den.fam$logpdf.gr)) {
     message('Analytic gradient not provided, nothing to check.')
     return(NULL)
   }
 
-  true.par <- den.fam$gen_par(1)
+  if(is.null(den.fam$gen_par)) {
+    den.fam$gen_par <- function(n) {
+      t(replicate(
+        n, apply(den.fam$par.range, 2, function(x) runif(1, x[1], x[2]))
+      ))
+    }
+  }
+  true.par <- as.numeric(den.fam$gen_par(1))
+  if(is.null(den.fam$rpdf)) {
+    warning('generating random sample with Runuran(slow)')
+    den.fam$rpdf <- function(n, par) {
+      gen <- Runuran::pinv.new(
+        pdf = den.fam$pdf,
+        lb = min(den.fam$range),
+        ub = max(den.fam$range),
+        center = mean(den.fam$range),
+        par = par
+      )
+      Runuran::ur(gen, n)
+    }
+  }
   obsv <- den.fam$rpdf(50, true.par)
 
   negLogll <- getNegLogll(obsv, den.fam)
@@ -845,6 +941,20 @@ r.truncate <- function(n, rpdf, edge, ...){
   return(res[1:n])
 }
 
+#' wrapper for computing pdf on a grid w.r.t multiple sets of parameter
+#'
+#' @param den.fam density family.
+#' @param mat.par matrix, one row is one set of parameters.
+#' @param grid on which to compute.
+#' @param n.rep number of repeats, duplicates the resulting density matrix.
+#'
+#' @return a matrix, one row is one density curve.
+#' @export
+#'
+#' @examples
+#' den.fam <- tNrml(3)
+#' grid <- seq(-3, 3, 0.05)
+#' matplot(grid, t(par2pdf(den.fam, den.fam$gen_par(3), grid)), type = 'l')
 par2pdf <- function(den.fam, mat.par, grid, n.rep = 1){
   # wrapper for computing pdf on a grid w.r.t multiple parameters
   # args:
@@ -1570,6 +1680,23 @@ xdCauchy <- function(){
 # checkDenFamGrident(den.fam)
 # checkDenFamNumeric(den.fam)
 
+#' Truncated Gaussian mixture family.
+#'
+#' @param edge support of density.
+#' @param num.mixture number of mixture.
+#'
+#' @return a list of
+#' - `pdf`: density function;
+#' - `logpdf.gr`: gradient of loglikelihood;
+#' - `rpdf`: random generator;
+#' - `gen_par`: generate parameters;
+#' - `par.range`: matrix of parameter range, one column for one parameter
+#' - `range`: domain of support;
+#' - `identify_par`: function to sort parameter (per mixture) for
+#' identifiability.
+#'
+#' @export
+#'
 tMixGauss <- function(edge, num.mixture = 3){
   # construct a truncated Gaussian mixture family.
 
@@ -1823,6 +1950,17 @@ tMixGauss <- function(edge, num.mixture = 3){
   ))
 }
 
+#' Translate a list of weight, mean, var to/from working parameterization
+#'
+#' @param ls.par  a named list with `weight`, `mean`, and `var` for Gaussian
+#' mixture family.
+#' @param work.par an array of working parameters, as used in `tMixGauss()`.
+#'
+#' @return a array of working parameter if supplying `ls.par`, or a list of
+#' `weight`, `mean`, and `var` if `work.par` supplied. Supplying both lead to
+#' error.
+#' @export
+#'
 tMixGauss.repar <- function(ls.par, work.par){
   # transplate a list of weigth, mean, var into/from working parameterization
   # args:

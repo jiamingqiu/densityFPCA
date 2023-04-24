@@ -1,5 +1,23 @@
 # some useful =================================================================
 
+#' Rejection sampling
+#'
+#' @param n number of samples to generate.
+#' @param df density function of target, vectorized.
+#' @param dg density function of generator, vectorized.
+#' @param rg generator.
+#' @param support common support.
+#'
+#' @return a vector of length `n`.
+#' @export
+#'
+#' @examples
+#' obsv <- rejSampling(
+#'   1e+4, df = function(t) t,
+#'   dg = function(t) 1, rg = function(n) runif(n, 0, 1),
+#'   support = c(0, 1)
+#' )
+#' hist(obsv, breaks = 100)
 rejSampling <- function(n, df, dg, rg, support){
   # rejection sampling
   # n: number of samples to generate
@@ -22,6 +40,16 @@ rejSampling <- function(n, df, dg, rg, support){
   return(res[seq(n)])
 }
 
+#' Orthogonalized log.
+#'
+#' @param f a vector for density function values.
+#' @param grid on which `f` is evaluated.
+#' @param against a vector of same size, or recycled/truncated to the same size.
+#'
+#' @return A vector: `log(f) - < log(f), against >`. Here inner product computed
+#' in \eqn{L^2} space of functions.
+#' @export
+#'
 orthLog <- function(f, grid, against = 1){
   # compute log(f) - < logf, against >_{L^2},
   # args:
@@ -236,12 +264,23 @@ checkDerivatives <- function(x, fn, gr, check_derivatives_tol = 1e-04,
 
 # polar <-> cartesian coord ===================================================
 
+#' Transform polar coordinate to Cartesian coordinate in
+#' \eqn{R^n} with \eqn{n \geq 2}.
+#'
+#' @param polar a matrix whose row is (r, theta1, ...)
+#'
+#' @return a matrix whose row is (x1, x2, ...)
+#' @export
+#'
+#' @examples
+#' pol2cart(matrix(c(1, pi/2), nrow = 1))
+#' cart2pol(matrix(c(0, 1), nrow = 1))
 pol2cart <- function(polar){
   # transform polar coord -> cartesian in R^n, n >= 2.
   # args:
-  # polar = a matrix whose row is (r, theta1, ...)
+  # polar = a matrix whose row is (r, theta1, ..., theta_{n-1})
   # returns:
-  # a matrix whose row is (x1, x2, ...)
+  # a matrix whose row is (x1, x2, ..., x_n)
 
   if (!is.matrix(polar)) {
     polar <- matrix(polar, nrow = 1)
@@ -261,6 +300,17 @@ pol2cart <- function(polar){
   return(res)
 }
 
+#' The Jacobian matrix of coordinate transform from polar to Cartesian .
+#'
+#' @param polar a array of (r, theta_1, ..., theta_{n-1})
+#'
+#' @return a n X n matrix where the row = i, col = j element being
+#' \eqn{\partial x_i / \partial theta_{j-1}}, where \eqn{x_i} is the Cartesian
+#' coordinate.
+#' @export
+#'
+#' @examples
+#' jacob.pol2cart(c(1, pi/2))
 jacob.pol2cart <- function(polar){
   # the Jacobian matrix of coordinate transform: polar -> cartesian
   # args:
@@ -296,6 +346,16 @@ jacob.pol2cart <- function(polar){
 
 }
 
+#' Transform Cartesian coordinate to polar coordinate.
+#'
+#' @param cart a matrix of coordinates, one row for one point, at least in R^2.
+#'
+#' @return a matrix of polar coordinates.
+#' @export
+#'
+#' @examples
+#' pol2cart(matrix(c(1, pi/2), nrow = 1))
+#' cart2pol(matrix(c(0, 1), nrow = 1))
 cart2pol <- function(cart){
   # inverse of pol2cart
   # args:
@@ -750,92 +810,3 @@ directPolish <- function(fn, gr = NULL, lower, upper, control = list(), ...){
     }
   }
 }
-
-
-
-#LEGACY Wrapper for built-in optim ============================================
-
-smartOptim = function(par, fn, method = 'Nelder-Mead', multiStart = c(1,0), ...){
-  # a wrapper for optim in R so as to handle errors
-  # only for length(par) >= 2
-  # par = initial value
-  # fn = objective function to be minimized
-  # multiStart = number of initial values to be generated, and variance of it.
-  #              for example, c(3, 2, 3, 4) means in addition to par whose length = 3, also initial at
-  #              replicate(2, par + runif(length(par), min = -c(2,3,4), max = c(2,3,4)))
-  #              if 1st number = 1, 2nd number ignored.
-  #              in short, length(multiStart) = 2 or length(par) + 1
-  #              if lenth(multiStart) = 2, the last element is recycled
-  # ... : additional control argument passing to optim
-  if(multiStart[1] == 1){
-    par = list(par)
-  }else{
-    if(length(multiStart) != 2 & length(multiStart) - 1 != length(par)) stop('check length of par and multiStart.')
-    par = c(
-      list(par),
-      replicate(multiStart[1] - 1,
-                par + runif(length(par), min = -multiStart[-1], max = multiStart[-1]),
-                simplify = F)
-    )
-  }
-
-  # idx.init = 1
-
-  opt_res = list()
-  # -1 for not touched
-  # 0 for works but may be cov.code
-  # 1 for totally broken
-  # though make thing overly slow, not implemented.
-  broken_opt = rep(-1, length(par))
-  idx.optim = 1
-
-  # get a list of methods with the specified one at first
-  lst_method = c("Nelder-Mead", "BFGS", "CG", "SANN")
-  lst_method = c(method, lst_method[!(lst_method == method)])
-  idx = 1
-  for(idx.init in 1:length(par)){
-    flg.nextMethod = TRUE
-    while(flg.nextMethod){
-      opt_res[[idx.init]] = tryCatch(
-        {optim(par = par[[idx.init]], fn = fn, method = lst_method[idx], ...)},
-        error = function(e){list(err = e, is.err = TRUE)}
-      )
-      # if optim works, gooooood
-      if(is.null(opt_res[[idx.init]]$is.err)){
-        flg.nextMethod = FALSE
-        # This will make things too slow, impractical
-        # if(opt_res[[idx.init]]$convergence == 0){
-        #   flg.nextMethod = FALSE
-        #   broken_opt[idx.init] = 0
-        # }
-
-        # label the minimum result, and note down its method
-        if(opt_res[[idx.init]]$value <= opt_res[[idx.optim]]$value){
-          idx.optim = idx.init
-          opt_res[[idx.optim]]$method = lst_method[idx]
-        }
-      }else{
-        # if all methods do not work
-        if(idx == length(lst_method)){
-          broken_opt[idx.init] = 1
-          # if(broken_opt[idx.init] == -1) broken_opt[idx.init] = 1
-          flg.nextMethod = FALSE
-        }else{
-          # otherwise try next
-          idx = idx + 1
-        }
-      }
-    }
-  }
-  # if all methods fail for all initial values
-  if(all(broken_opt == 1)) stop('Optim broken.')
-
-  # now just keep the best opt_res
-  opt_res = opt_res[[idx.optim]]
-  msg = NULL
-  if(opt_res$method != method) msg = paste0(msg, 'Optim using ', opt_res$method, '. ')
-  if(opt_res$convergence != 0) msg = paste0(msg, 'Convergence code ', opt_res$convergence, '.')
-  if(!is.null(msg)) warning(paste0(msg, '\n'))
-  return(opt_res)
-}
-

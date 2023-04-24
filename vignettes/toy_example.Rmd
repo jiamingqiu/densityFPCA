@@ -78,7 +78,7 @@ rm(ls.tm)
 dat$grid <- grid
 ```
 
-Functional principal component analysis and the induced density family.
+Functional principal component analysis.
 ```{r}
 fpca.res <- do.call(
   fdapace::FPCA,
@@ -86,17 +86,20 @@ fpca.res <- do.call(
     Ly = asplit(dat$train.curve, 1),
     Lt = replicate(n = nrow(dat$train.curve), expr = grid, simplify = FALSE),
     optns = list(
-      error = TRUE,
-      lean = TRUE,
-      FVEthreshold = 1,
-      methodSelectK = 'FVE',
-      plot = FALSE,
-      useBinnedData = 'OFF'
+      error = TRUE, lean = TRUE, FVEthreshold = 1,
+      methodSelectK = 'FVE', plot = FALSE, useBinnedData = 'OFF'
     )
   )
 )
-fpca.den.fam <- fpca2DenFam(fpca.res, control = list(num.k = max.k))
 ```
+
+Construct the induced approximating exponential family, and numeric checks.
+```{r}
+fpca.den.fam <- fpca2DenFam(fpca.res, control = list(num.k = max.k))
+checkDenFamNumeric(fpca.den.fam)
+checkDenFamGrident(fpca.den.fam)
+```
+
 
 We can now estimate using the induced family `fpca.den.fam`.
 ```{r}
@@ -120,7 +123,7 @@ ls.fpca.esti$idx %>% head
 ```
 
 We can also look at the density functions.
-```{r, fig.width=8, fig.height=5}
+```{r, fig.width=6, fig.height=5}
 mat.pdf <- par2pdf(
   fpca.den.fam, 
   fpca.den.fam$fill.par(ls.fpca.esti$res %>% `[<-`(is.na(.), 0)),
